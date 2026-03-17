@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# gh-my-reviews
+# 自分が直接レビュアーに指定されているPRを横断検索する（チーム経由を除外）
+
+set -eo pipefail
+
+ME=$(gh api user --jq '.login')
+
+echo "🔍 Searching PRs where @${ME} is directly requested as reviewer..."
+echo ""
+
+FOUND=0
+
+while IFS=$'\t' read -r url author title; do
+  echo "📌 ${title}"
+  echo "   👤 ${author}  🔗 ${url}"
+  echo ""
+  FOUND=$((FOUND + 1))
+done < <(
+  gh api graphql --paginate -f query='
+    query($endCursor: String) {
+      search(
+        query: "is:pr is:open review-requested:'"$ME"'"
+        type: ISSUE
+        first: 50
+        after: $endCursor
+      ) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          ... on PullRequest {
+            number
+            title
+            url
+            createdAt
+            author { login }
+            reviewRequests(first: 20) {
+              nodes {
+                requestedReviewer {
+                  ... on User     { login    __typename }
+                  ... on Team     { name     __typename }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ' | jq -r --arg me "$ME" '
+    .data.search.nodes[] |
+    select(
+      .reviewRequests.nodes | any(
+        .requestedReviewer.__typename == "User" and
+        .requestedReviewer.login == $me
+      )
+    ) |
+    "\(.url)\t\(.author.login)\t\(.title)"
+  '
+)
+
+if [ "$FOUND" -eq 0 ]; then
+  echo "✅ No pending review requests."
+fi
