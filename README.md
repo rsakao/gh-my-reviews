@@ -14,7 +14,7 @@ A [GitHub CLI](https://cli.github.com/) extension that lists open pull requests 
 ## Installation
 
 ```bash
-gh extension install <owner>/gh-my-reviews
+gh extension install rsakao/gh-my-reviews
 ```
 
 ## Usage
